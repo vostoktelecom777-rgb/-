@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Опрос графика работы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Onest:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: форма голосования слева, живые результаты справа; на телефоне одна колонка.
+   Каждый вариант показан на общей шкале 8:00-18:00, чтобы сдвиг начала дня был виден глазами. */
+:root {
+  --bg: #F2F5F7;
+  --surface: #FFFFFF;
+  --fg: #14202B;
+  --muted: #566674;
+  --line: #D5DDE3;
+  --accent: #0B6E6E;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DDF0EE;
+  --track: #E4EAEE;
+  --danger: #B3261E;
+  --scene-dim: 0;
+  --sky-a: #F2C48A; --sky-b: #FBE9CC; --hill-b: #D7A45E; --hill-f: #B97A33; --vill: #7A4A1E; --tower: #6B4A2E;
+  --font-display: 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F161C; --surface: #18222B; --fg: #E7EDF2; --muted: #93A3B1; --line: #2B3946;
+    --accent: #4CC3B8; --accent-ink: #06201E; --accent-soft: #163533; --track: #243240; --danger: #FF8A80; --scene-dim: 0.55;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F161C; --surface: #18222B; --fg: #E7EDF2; --muted: #93A3B1; --line: #2B3946;
+  --accent: #4CC3B8; --accent-ink: #06201E; --accent-soft: #163533; --track: #243240; --danger: #FF8A80; --scene-dim: 0.55;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  padding-block: 32px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; position: relative; z-index: 1; }
+
+header { margin-bottom: 28px; max-width: 62ch; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.lead { margin: 0; color: var(--muted); font-size: 1.0625rem; }
+
+.cols { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+.cols.solo { grid-template-columns: minmax(0, 640px); }
+@media (min-width: 900px) {
+  .cols { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); align-items: start; }
+}
+
+.panel {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 0;
+  position: relative;
+  isolation: isolate;
+  --orn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M40 8L72 40L40 72L8 40Z'/%3E%3Cpath d='M40 24L56 40L40 56L24 40Z'/%3E%3Cpath d='M0 16C9 16 16 9 16 0'/%3E%3Cpath d='M80 16C71 16 64 9 64 0'/%3E%3Cpath d='M0 64C9 64 16 71 16 80'/%3E%3Cpath d='M80 64C71 64 64 71 64 80'/%3E%3C/g%3E%3Ccircle cx='40' cy='40' r='3'/%3E%3C/svg%3E");
+}
+/* Орнамент: ромбы с завитками в казахском стиле, водяной знак на белых карточках */
+.panel::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background: var(--accent); opacity: 0.075;
+  -webkit-mask: var(--orn) 0 0 / 80px 80px repeat; mask: var(--orn) 0 0 / 80px 80px repeat;
+}
+.panel::after {
+  content: ""; position: absolute; top: 0; right: 0; width: 150px; height: 150px; z-index: -1; pointer-events: none;
+  background: var(--accent); opacity: 0.16;
+  -webkit-mask: var(--orn) center / 150px 150px no-repeat; mask: var(--orn) center / 150px 150px no-repeat;
+}
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label, .flabel, legend {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+input[type="text"] {
+  font: inherit;
+  font-size: 1rem;
+  height: 46px;
+  padding: 0 14px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: 100%;
+  min-width: 0;
+}
+input[type="text"]::placeholder { color: var(--muted); opacity: 0.8; }
+input[type="text"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+@media (min-width: 560px) {
+  .row3 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+}
+
+fieldset { border: 0; padding: 0; margin: 8px 0 0; min-width: 0; }
+legend { padding: 0; margin-bottom: 10px; }
+.opts { display: grid; gap: 10px; }
+.opt { display: block; position: relative; cursor: pointer; }
+.opt input {
+  position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0;
+}
+.opt-body {
+  display: grid; gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  transition: border-color .15s, background-color .15s;
+}
+.opt:hover .opt-body { border-color: var(--accent); }
+.opt input:checked + .opt-body { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.opt input:focus-visible + .opt-body { outline: 2px solid var(--accent); outline-offset: 2px; }
+.opt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.opt-n { font-size: 0.8125rem; color: var(--muted); font-weight: 500; }
+.opt-time { font-family: var(--font-mono); font-weight: 500; font-size: 1.375rem; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.opt-left { display: grid; gap: 2px; }
+.dot {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line);
+  flex: none; position: relative; background: var(--surface);
+}
+.opt input:checked + .opt-body .dot { border-color: var(--accent); background: var(--accent); }
+.opt input:checked + .opt-body .dot::after {
+  content: ""; position: absolute; left: 5px; top: 2px; width: 5px; height: 9px;
+  border: solid var(--accent-ink); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.track { position: relative; height: 10px; border-radius: 5px; background: var(--track); }
+.track .span { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--accent); }
+.axis { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.6875rem; color: var(--muted); margin-top: -2px; }
+.opt-meta { font-size: 0.8125rem; color: var(--muted); }
+
+.btn {
+  font: inherit; font-weight: 600; font-size: 1rem;
+  height: 48px; padding: 0 28px; margin-top: 20px;
+  background: var(--accent); color: var(--accent-ink);
+  border: 0; border-radius: 8px; cursor: pointer; width: 100%;
+}
+@media (min-width: 560px) { .btn { width: auto; } }
+.btn:hover:not(:disabled) { filter: brightness(1.08); }
+.btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-quiet {
+  font: inherit; font-size: 0.8125rem; height: 32px; padding: 0 12px; cursor: pointer;
+  background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; white-space: nowrap;
+}
+.btn-quiet[data-armed="1"] { color: var(--danger); border-color: var(--danger); }
+.btn-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.msg { margin: 14px 0 0; font-size: 0.9375rem; min-height: 1.4em; }
+.msg.err { color: var(--danger); }
+.notice {
+  margin: 0 0 16px; padding: 12px 14px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--fg); font-size: 0.9375rem;
+}
+
+.done h2 { margin-bottom: 8px; }
+.done p { margin: 0; color: var(--muted); }
+.done strong { color: var(--fg); font-family: var(--font-mono); font-weight: 500; }
+
+.total { margin: -8px 0 20px; color: var(--muted); font-size: 0.9375rem; }
+.total b { color: var(--fg); font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.results { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+.res-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.res-n { font-size: 0.8125rem; color: var(--muted); font-weight: 500; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.res-time { font-family: var(--font-mono); font-size: 1.0625rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.res-pct { font-family: var(--font-mono); font-size: 2rem; line-height: 1; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.bar { height: 12px; border-radius: 6px; background: var(--track); overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 6px; transition: width .5s ease; }
+.res-count { margin-top: 6px; font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip {
+  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+}
+.privacy { margin: 24px 0 0; font-size: 0.8125rem; color: var(--muted); max-width: 58ch; }
+
+.admin { margin-top: 24px; }
+.admin summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 1.0625rem; }
+.admin summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.tablewrap { overflow-x: auto; margin-top: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.9375rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+td.mono { font-family: var(--font-mono); font-size: 0.875rem; white-space: nowrap; }
+.empty { color: var(--muted); margin: 14px 0 0; }
+
+header.hero {
+  position: relative; overflow: hidden; max-width: none;
+  padding: 28px 28px 30px; border-radius: 14px;
+  background: var(--accent); color: var(--accent-ink);
+}
+.hero h1, .hero .lead { position: relative; color: var(--accent-ink); }
+.hero .lead { opacity: 0.92; max-width: 60ch; }
+.eyebrow {
+  position: relative; margin: 0 0 10px; font-size: 0.8125rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.88;
+}
+.signal { position: absolute; right: -24px; top: -24px; width: 230px; height: 230px; color: var(--accent-ink); opacity: 0.22; pointer-events: none; }
+
+.cities-wrap { position: relative; }
+.cities { display: flex; flex-wrap: wrap; gap: 8px; }
+.cchip { position: relative; cursor: pointer; }
+.cchip input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.cb {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font-size: 0.9375rem;
+  transition: border-color .15s, background-color .15s;
+}
+.cchip[data-city="other"] .cb { padding-left: 14px; }
+.cchip:hover .cb { border-color: var(--accent); }
+.cchip input:checked + .cb { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.cchip input:focus-visible + .cb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ico { width: 26px; height: 26px; color: var(--accent); flex: none; }
+.city-pop {
+  position: absolute; z-index: 5; display: flex; align-items: center; gap: 14px;
+  width: min(300px, 100%); padding: 14px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(10, 24, 34, 0.2);
+}
+.city-pop .big { width: 88px; height: 88px; flex: none; color: var(--accent); }
+.pop-t em { margin-top: 4px; font-size: 0.75rem; font-style: normal; color: var(--muted); }
+.pop-t { display: grid; gap: 2px; min-width: 0; }
+.pop-t strong { font-family: var(--font-display); font-size: 1.125rem; }
+.pop-t span { font-size: 0.8125rem; color: var(--muted); }
+.other { margin-top: 10px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+.hint { font-size: 0.8125rem; color: var(--muted); }
+@media (max-width: 420px) { header.hero { padding: 22px 18px 24px; } }
+
+/* Живой фон: степь, вышки связи и село; частицы меняются по сезону */
+:root[data-season="winter"] { --sky-a: #BFD3E4; --sky-b: #EEF4F8; --hill-b: #D9E4EC; --hill-f: #C2D0DC; --vill: #6C7F92; --tower: #5B6E80; }
+:root[data-season="spring"] { --sky-a: #BFE3F0; --sky-b: #EAF6E2; --hill-b: #A6D39A; --hill-f: #7FBB7D; --vill: #4F7A55; --tower: #4A6B52; }
+:root[data-season="summer"] { --sky-a: #7FC8F0; --sky-b: #E4F5FF; --hill-b: #D8C766; --hill-f: #A9C24F; --vill: #7A6A2E; --tower: #6E6034; }
+.scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: linear-gradient(180deg, var(--sky-a), var(--sky-b)); }
+.scene::after { content: ""; position: absolute; inset: 0; background: #0A121A; opacity: var(--scene-dim); }
+.land { position: absolute; left: 0; bottom: 0; width: 100%; height: 60vh; min-height: 260px; }
+#fx { position: absolute; inset: 0; }
+.hb { fill: var(--hill-b); }
+.hf { fill: var(--hill-f); }
+.vil { fill: var(--vill); }
+.tw { fill: none; stroke: var(--tower); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.sig path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: 0.1; animation: sigpulse 3.2s ease-in-out infinite; }
+@keyframes sigpulse { 0%, 100% { opacity: 0.1; } 40% { opacity: 0.95; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sig path { animation: none; opacity: 0.6; }
+  .bar span, .opt-body { transition: none; }
+}
+@media (max-width: 420px) {
+  .panel { padding: 18px; }
+  .res-pct { font-size: 1.75rem; }
+}
+</style>
+</head>
+<body>
+
+
+<div class="scene" aria-hidden="true">
+  <svg class="land" viewBox="0 0 1440 420" preserveAspectRatio="xMidYMax slice">
+    <path class="hb" d="M0 250C180 200 340 230 520 215C720 195 900 245 1100 226C1250 210 1360 228 1440 218V420H0Z"/>
+    <g transform="translate(330 234) scale(0.65)">
+      <path class="tw" d="M-16 0L0 -120L16 0M-11 -30H11M-7 -60H7M-4 -90H4M-16 0L11 -30M16 0L-11 -30M-11 -30L7 -60M11 -30L-7 -60M-7 -60L4 -90M7 -60L-4 -90"/>
+      <path class="tw" d="M-6 -122h12"/>
+      <g class="sig" transform="translate(0 -128)">
+        <path d="M10 -10A14 14 0 0 1 10 10"/><path d="M-10 -10A14 14 0 0 0 -10 10"/>
+        <path style="animation-delay:.5s" d="M18 -18A26 26 0 0 1 18 18"/><path style="animation-delay:.5s" d="M-18 -18A26 26 0 0 0 -18 18"/>
+        <path style="animation-delay:1s" d="M27 -27A38 38 0 0 1 27 27"/><path style="animation-delay:1s" d="M-27 -27A38 38 0 0 0 -27 27"/>
+      </g>
+    </g>
+    <g transform="translate(1100 226)">
+      <path class="tw" d="M-16 0L0 -120L16 0M-11 -30H11M-7 -60H7M-4 -90H4M-16 0L11 -30M16 0L-11 -30M-11 -30L7 -60M11 -30L-7 -60M-7 -60L4 -90M7 -60L-4 -90"/>
+      <path class="tw" d="M-6 -122h12"/>
+      <g class="sig" transform="translate(0 -128)">
+        <path d="M10 -10A14 14 0 0 1 10 10"/><path d="M-10 -10A14 14 0 0 0 -10 10"/>
+        <path style="animation-delay:.5s" d="M18 -18A26 26 0 0 1 18 18"/><path style="animation-delay:.5s" d="M-18 -18A26 26 0 0 0 -18 18"/>
+        <path style="animation-delay:1s" d="M27 -27A38 38 0 0 1 27 27"/><path style="animation-delay:1s" d="M-27 -27A38 38 0 0 0 -27 27"/>
+      </g>
+    </g>
+    <path class="hf" d="M0 320C200 290 380 330 600 310C820 290 1000 335 1220 305C1330 292 1400 300 1440 296V420H0Z"/>
+    <path class="tw" d="M470 318V272M456 280h28M550 316V270M536 278h28M630 314V268M616 276h28M470 276Q510 292 550 274M550 274Q590 290 630 272"/>
+    <path class="vil" d="M700 314v-24l20-14 20 14v24zM748 312v-30l22-16 22 16v30zM806 316v-20l18-12 18 12v20z"/>
+    <path class="vil" d="M880 318a22 20 0 0 1 44 0z"/>
+    <path class="tw" d="M890 300l12-10 12 10"/>
+    <ellipse class="vil" cx="684" cy="302" rx="8" ry="15"/><ellipse class="vil" cx="944" cy="306" rx="8" ry="14"/><ellipse class="vil" cx="966" cy="310" rx="7" ry="12"/>
+  </svg>
+  <canvas id="fx"></canvas>
+</div>
+<div class="wrap">
+  <header class="hero">
+    <svg class="signal" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" aria-hidden="true">
+      <circle cx="150" cy="50" r="7" fill="currentColor" stroke="none"/>
+      <path d="M150 80A30 30 0 0 1 120 50"/><path d="M150 110A60 60 0 0 1 90 50"/>
+      <path d="M150 140A90 90 0 0 1 60 50"/><path d="M150 170A120 120 0 0 1 30 50"/>
+    </svg>
+    <p class="eyebrow">Опрос сотрудников ТОО «Ауыл Телеком»</p>
+    <h1>Опрос графика работы</h1>
+    <p class="lead">Пятидневная рабочая неделя, понедельник – пятница. Выберите удобное время начала рабочего дня. Во всех вариантах перерыв на обед составляет 1 час.</p>
+  </header>
+
+  <div class="cols solo" id="cols">
+    <section class="panel" aria-labelledby="form-title">
+      <div id="vote-area">
+        <h2 id="form-title">Ваш голос</h2>
+        <p class="notice" id="gate" hidden></p>
+        <form id="vote-form" novalidate>
+          <div class="row3">
+            <div class="field">
+              <label for="f-fio">ФИО</label>
+              <input type="text" id="f-fio" name="fio" autocomplete="name" placeholder="Иванов Иван Иванович" maxlength="120">
+            </div>
+            <div class="field">
+              <label for="f-position">Должность</label>
+              <input type="text" id="f-position" name="position" autocomplete="organization-title" placeholder="Например, главный бухгалтер" maxlength="120">
+            </div>
+          </div>
+          <div class="field">
+            <span class="flabel" id="city-label">Город</span>
+            <div class="cities-wrap" id="cities-wrap">
+              <div class="cities" id="cities" role="radiogroup" aria-labelledby="city-label"></div>
+              <div class="city-pop" id="city-pop" hidden></div>
+            </div>
+            <input type="text" id="f-city-other" class="other" placeholder="Введите название города" maxlength="80" autocomplete="address-level2" aria-label="Название города" hidden>
+          </div>
+          <fieldset>
+            <legend>Рабочий график</legend>
+            <div class="opts" id="opts"></div>
+          </fieldset>
+          <button type="submit" class="btn" id="submit">Проголосовать</button>
+          <p class="msg" id="msg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <div class="done" id="done" hidden>
+        <h2>Ваш голос учтён</h2>
+        <p>Выбранный график: <strong id="done-choice"></strong>. Один аккаунт голосует один раз. Результаты опроса видит только администратор.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="res-panel" aria-labelledby="res-title" hidden>
+      <h2 id="res-title">Результаты</h2>
+      <p class="notice" id="res-note" hidden></p>
+      <p class="total" id="total">Проголосовало: <b>0</b> человек</p>
+      <ul class="results" id="results"></ul>
+      <p class="privacy">Результаты и список проголосовавших видят только администраторы страницы. Остальным участникам они недоступны.</p>
+    </section>
+  </div>
+
+  <details class="admin panel" id="admin" hidden>
+    <summary>Список проголосовавших</summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>ФИО</th><th>Должность</th><th>Город</th><th>График</th><th id="th-act"></th></tr></thead>
+        <tbody id="voters-body"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="voters-empty">Пока никто не проголосовал.</p>
+    <div class="actions">
+      <button type="button" class="btn-quiet" id="csv" hidden>Скачать CSV для Google Таблицы</button>
+      <span class="hint">В Google Таблицах: Файл → Импорт → Загрузка.</span>
+    </div>
+  </details>
+</div>
+
+<script>
+(function () {
+  var OPTIONS = [
+    { id: 'a', n: 1, start: '9:00',  end: '18:00', from: 9,   to: 18 },
+    { id: 'b', n: 2, start: '8:30',  end: '17:30', from: 8.5, to: 17.5 },
+    { id: 'c', n: 3, start: '8:00',  end: '17:00', from: 8,   to: 17 }
+  ];
+  var AXIS_FROM = 8, AXIS_TO = 18;
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $('vote-form'), msg = $('msg'), submitBtn = $('submit');
+
+  function label(o) { return o.start + ' – ' + o.end; }
+  function plural(n, f) {
+    var a = n % 10, b = n % 100;
+    if (a === 1 && b !== 11) return f[0];
+    if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return f[1];
+    return f[2];
+  }
+
+  // Варианты в форме
+  $('opts').innerHTML = OPTIONS.map(function (o) {
+    var left = (o.from - AXIS_FROM) / (AXIS_TO - AXIS_FROM) * 100;
+    var width = (o.to - o.from) / (AXIS_TO - AXIS_FROM) * 100;
+    return '<label class="opt"><input type="radio" name="schedule" value="' + o.id + '" id="opt-' + o.id + '">' +
+      '<span class="opt-body">' +
+        '<span class="opt-head"><span class="opt-left"><span class="opt-n">Вариант ' + o.n + '</span>' +
+        '<span class="opt-time">' + label(o) + '</span></span><span class="dot" aria-hidden="true"></span></span>' +
+        '<span class="track" aria-hidden="true"><span class="span" style="left:' + left + '%;width:' + width + '%"></span></span>' +
+        '<span class="axis" aria-hidden="true"><span>8:00</span><span>18:00</span></span>' +
+        '<span class="opt-meta">8 часов работы и обед 1 час</span>' +
+      '</span></label>';
+  }).join('');
+
+  // Строки результатов
+  $('results').innerHTML = OPTIONS.map(function (o) {
+    return '<li class="res" data-id="' + o.id + '">' +
+      '<div class="res-top"><div><div class="res-n"><span>Вариант ' + o.n + '</span><span class="chip" hidden>Ваш выбор</span></div>' +
+      '<div class="res-time">' + label(o) + '</div></div><div class="res-pct">0%</div></div>' +
+      '<div class="bar"><span></span></div><div class="res-count">0 голосов</div></li>';
+  }).join('');
+
+  var state = { counts: { a: 0, b: 0, c: 0 }, mine: null, loaded: false, canVote: true, owner: false };
+
+  function percents(counts, total) {
+    if (!total) return counts.map(function () { return 0; });
+    var raw = counts.map(function (c) { return c * 100 / total; });
+    var fl = raw.map(Math.floor);
+    var rem = 100 - fl.reduce(function (s, x) { return s + x; }, 0);
+    var order = raw.map(function (r, i) { return [r - fl[i], i]; }).sort(function (x, y) { return y[0] - x[0]; });
+    for (var k = 0; k < rem; k++) fl[order[k][1]]++;
+    return fl;
+  }
+
+  function renderResults() {
+    var counts = OPTIONS.map(function (o) { return state.counts[o.id] || 0; });
+    var total = counts.reduce(function (s, x) { return s + x; }, 0);
+    var pct = percents(counts, total);
+    $('total').innerHTML = 'Проголосовало: <b>' + total + '</b> ' + plural(total, ['человек', 'человека', 'человек']);
+    OPTIONS.forEach(function (o, i) {
+      var li = document.querySelector('.res[data-id="' + o.id + '"]');
+      li.querySelector('.res-pct').textContent = pct[i] + '%';
+      li.querySelector('.bar span').style.width = pct[i] + '%';
+      li.querySelector('.res-count').textContent = counts[i] + ' ' + plural(counts[i], ['голос', 'голоса', 'голосов']);
+      li.querySelector('.chip').hidden = state.mine !== o.id;
+    });
+    var voted = !!state.mine;
+    $('vote-area').hidden = voted;
+    $('done').hidden = !voted;
+    if (voted) {
+      var o = OPTIONS.filter(function (x) { return x.id === state.mine; })[0];
+      $('done-choice').textContent = o ? 'вариант ' + o.n + ', ' + label(o) : '';
+    }
+  }
+
+  function gate(text, blockForm) {
+    var g = $('gate');
+    g.textContent = text; g.hidden = !text;
+    if (blockForm) {
+      state.canVote = false;
+      submitBtn.disabled = true;
+      Array.prototype.forEach.call(form.elements, function (el) { el.disabled = true; });
+    }
+  }
+  function resNote(text) { var n = $('res-note'); n.textContent = text; n.hidden = !text; }
+  function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
+
+  renderResults();
+
+  var db = null, uid = null, submitting = false, lastVoters = [], csvSave = null;
+
+  // Города: упрощённые собственные рисунки-символы, карточка появляется при наведении, фокусе и выборе
+  var CITIES = [
+    { id: 'almaty', name: 'Алматы', cap: 'Горы Заилийского Алатау и яблоня',
+      art: '<path d="M6 80L30 44l12 16 20-30 28 50z"/><path d="M26 52l4-8 5 7M56 40l6-10 7 10"/><circle cx="20" cy="22" r="8"/><path d="M20 14q1-5 6-6"/>' },
+    { id: 'astana', name: 'Астана', cap: 'Монумент «Байтерек»',
+      art: '<path d="M36 88L44 48M60 88L52 48M44 48h8"/><circle cx="48" cy="30" r="16"/><circle cx="48" cy="30" r="6"/><path d="M48 14V6M26 88h44"/>' },
+    { id: 'shymkent', name: 'Шымкент', cap: 'Южная столица Казахстана',
+      art: '<path d="M10 88h76M16 88V58h14v30M34 88V40h16v48M54 88V52h12v36M70 88V64h10v24M34 40a8 8 0 0 1 16 0M42 32V22"/>' },
+    { id: 'pavlodar', name: 'Павлодар', cap: 'Мечеть имени Машхура Жусупа',
+      art: '<path d="M26 88V60a22 22 0 0 1 44 0v28M10 88h76M48 38V26M44 26h8M14 88V44M20 88V44M14 44l3-8 3 8M76 88V44M82 88V44M76 44l3-8 3 8"/>' },
+    { id: 'aktobe', name: 'Актобе', cap: 'Город на западе Казахстана',
+      art: '<path d="M48 10l7 62H41z"/><path d="M30 72h36v8H30zM22 80h52v8H22z"/>' }
+  ];
+  function icon(art, cls) {
+    return '<svg class="' + cls + '" viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + art + '</svg>';
+  }
+  function shield(art, cls) {
+    return '<svg class="' + cls + '" viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M48 5L84 15V46C84 69 68 84 48 92C28 84 12 69 12 46V15Z" fill="var(--accent-soft)"/>' +
+      '<g transform="translate(24 21) scale(0.52)" stroke-width="5.5">' + art + '</g></svg>';
+  }
+  $('cities').innerHTML = CITIES.map(function (c) {
+    return '<label class="cchip" data-city="' + c.id + '"><input type="radio" name="city" value="' + c.id + '"><span class="cb">' +
+      icon(c.art, 'ico') + '<span>' + c.name + '</span></span></label>';
+  }).join('') + '<label class="cchip" data-city="other"><input type="radio" name="city" value="other"><span class="cb"><span>Другой город</span></span></label>';
+
+  var pop = $('city-pop'), cwrap = $('cities-wrap'), hideT = null;
+  function hidePop() { pop.hidden = true; }
+  function hideSoon() { clearTimeout(hideT); hideT = setTimeout(hidePop, 160); }
+  function showPop(chip) {
+    var id = chip.getAttribute('data-city');
+    var c = CITIES.filter(function (x) { return x.id === id; })[0];
+    clearTimeout(hideT);
+    if (!c) { hidePop(); return; }
+    pop.innerHTML = shield(c.art, 'big') + '<div class="pop-t"><strong>' + c.name + '</strong><span>' + c.cap + '</span><em>Эмблема-рисунок, не официальный герб</em></div>';
+    pop.hidden = false;
+    pop.style.left = Math.max(0, Math.min(chip.offsetLeft, cwrap.clientWidth - pop.offsetWidth)) + 'px';
+    pop.style.top = (chip.offsetTop + chip.offsetHeight + 8) + 'px';
+  }
+  Array.prototype.forEach.call($('cities').querySelectorAll('.cchip'), function (chip) {
+    var input = chip.querySelector('input');
+    chip.addEventListener('mouseenter', function () { showPop(chip); });
+    chip.addEventListener('mouseleave', hideSoon);
+    chip.addEventListener('click', function () { setTimeout(function () { showPop(chip); }, 0); });
+    input.addEventListener('focus', function () { showPop(chip); });
+    input.addEventListener('blur', hideSoon);
+    input.addEventListener('change', function () {
+      var other = input.value === 'other';
+      $('f-city-other').hidden = !other;
+      showPop(chip);
+      if (other) $('f-city-other').focus();
+    });
+  });
+  pop.addEventListener('mouseenter', function () { clearTimeout(hideT); });
+  pop.addEventListener('mouseleave', hideSoon);
+  document.addEventListener('click', function (e) { if (!cwrap.contains(e.target)) hidePop(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hidePop(); });
+
+  // Живой фон: частицы по сезону (осень: листья, зима: снег, весна: лепестки, лето: пух)
+  var SEASONS = {
+    autumn: { n: 26, kind: 'leaf',  colors: ['#D9782B', '#C2491D', '#E0A526', '#A8501F'] },
+    winter: { n: 80, kind: 'snow',  colors: ['#FFFFFF', '#F2F7FB'] },
+    spring: { n: 34, kind: 'petal', colors: ['#F6BFD0', '#FBE1E8', '#FFFFFF'] },
+    summer: { n: 24, kind: 'seed',  colors: ['#FFF6C2', '#FFFFFF', '#FFE98A'] }
+  };
+  var cv = $('fx'), ctx = cv.getContext('2d'), W = 0, H = 0, parts = [], cur = 'autumn', raf = 0, lastTs = 0;
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  function sizeCanvas() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function makePart(cfg, init) {
+    var k = cfg.kind;
+    return {
+      x: rnd(0, W), y: init ? rnd(0, H) : rnd(-40, -10),
+      s: k === 'leaf' ? rnd(7, 13) : k === 'snow' ? rnd(1.2, 3.2) : k === 'petal' ? rnd(3, 6) : rnd(1.5, 3),
+      vy: k === 'seed' ? rnd(-4, 8) : k === 'leaf' ? rnd(25, 55) : k === 'snow' ? rnd(20, 50) : rnd(18, 40),
+      vx: k === 'seed' ? rnd(14, 34) : rnd(-4, 10),
+      amp: k === 'snow' ? rnd(6, 16) : rnd(14, 34), fr: rnd(0.6, 1.4), ph: rnd(0, 6.28),
+      r: rnd(0, 6.28), vr: rnd(-1.4, 1.4), f: rnd(0, 6.28),
+      c: cfg.colors[Math.floor(Math.random() * cfg.colors.length)]
+    };
+  }
+  function buildParts() {
+    var cfg = SEASONS[cur];
+    var n = Math.round(cfg.n * Math.min(1, W / 900) + 6);
+    parts = [];
+    for (var i = 0; i < n; i++) parts.push(makePart(cfg, true));
+  }
+  function drawPart(p, kind) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = p.c;
+    if (kind === 'leaf') {
+      ctx.rotate(p.r); ctx.scale(Math.max(0.35, Math.abs(Math.cos(p.f))), 1);
+      ctx.beginPath(); ctx.moveTo(0, -p.s);
+      ctx.quadraticCurveTo(p.s * 0.85, -p.s * 0.2, 0, p.s);
+      ctx.quadraticCurveTo(-p.s * 0.85, -p.s * 0.2, 0, -p.s); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, -p.s); ctx.lineTo(0, p.s); ctx.stroke();
+    } else if (kind === 'petal') {
+      ctx.rotate(p.r); ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 6.2832); ctx.fill();
+    } else if (kind === 'seed') {
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath(); ctx.arc(0, 0, p.s, 0, 6.2832); ctx.fill();
+      ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(0, 0, p.s * 2.4, 0, 6.2832); ctx.fill();
+    } else {
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(0, 0, p.s, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawAll() {
+    var kind = SEASONS[cur].kind;
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < parts.length; i++) drawPart(parts[i], kind);
+  }
+  function frame(ts) {
+    var dt = Math.min((ts - lastTs) / 1000, 0.05) || 0.016, cfg = SEASONS[cur], t = ts / 1000;
+    lastTs = ts;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      p.x += (p.vx + Math.sin(t * p.fr + p.ph) * p.amp) * dt;
+      p.y += p.vy * dt; p.r += p.vr * dt; p.f += dt * 1.6;
+      if (p.y > H + 20 || p.y < -60 || p.x > W + 30 || p.x < -30) {
+        var q = makePart(cfg, false);
+        if (cfg.kind === 'seed') { q.x = -20; q.y = rnd(0, H); }
+        parts[i] = q;
+      }
+    }
+    drawAll();
+    raf = requestAnimationFrame(frame);
+  }
+  function runFx() {
+    cancelAnimationFrame(raf);
+    if (reduceMotion) { drawAll(); return; }
+    lastTs = performance.now();
+    raf = requestAnimationFrame(frame);
+  }
+  function setSeason(key) {
+    if (!SEASONS[key]) key = 'autumn';
+    cur = key;
+    document.documentElement.setAttribute('data-season', key);
+    buildParts(); runFx();
+  }
+  function seasonByDate(d) {
+    var m = d.getMonth();
+    return m >= 2 && m <= 4 ? 'spring' : m >= 5 && m <= 7 ? 'summer' : m >= 8 && m <= 10 ? 'autumn' : 'winter';
+  }
+  window.addEventListener('resize', function () { sizeCanvas(); buildParts(); if (reduceMotion) drawAll(); });
+  // Сезон берётся из даты на устройстве; при возвращении на вкладку дата проверяется заново
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { cancelAnimationFrame(raf); return; }
+    var s = seasonByDate(new Date());
+    if (s !== cur) setSeason(s); else runFx();
+  });
+  sizeCanvas();
+  setSeason(seasonByDate(new Date()));
+
+  // Выгрузка в CSV для Google Таблиц
+  function csvCell(s) {
+    s = String(s == null ? '' : s);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  $('csv').addEventListener('click', function () {
+    if (!csvSave) return;
+    var rows = [['Дата', 'ФИО', 'Должность', 'Город', 'Вариант графика']];
+    lastVoters.forEach(function (d) {
+      var v = d.v, o = OPTIONS.filter(function (x) { return x.id === v.option; })[0];
+      rows.push([v.t ? new Date(v.t).toLocaleString('ru-RU') : '', v.fio, v.position, v.city, o ? 'Вариант ' + o.n + ': ' + label(o) : '']);
+    });
+    var text = '﻿' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+    csvSave.save({ filename: 'opros-grafika-' + new Date().toISOString().slice(0, 10) + '.csv', data: text }).catch(function () {});
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (submitting || !state.canVote) return;
+    var fio = $('f-fio').value.trim().replace(/\s+/g, ' ');
+    var position = $('f-position').value.trim();
+    var cityRadio = form.querySelector('input[name="city"]:checked');
+    var city = '';
+    if (cityRadio) {
+      city = cityRadio.value === 'other' ? $('f-city-other').value.trim()
+        : CITIES.filter(function (c) { return c.id === cityRadio.value; })[0].name;
+    }
+    var chosen = form.querySelector('input[name="schedule"]:checked');
+    if (fio.split(' ').length < 2 || fio.length < 5) { setMsg('Введите ФИО полностью: фамилию и имя.', true); $('f-fio').focus(); return; }
+    if (position.length < 2) { setMsg('Укажите должность.', true); $('f-position').focus(); return; }
+    if (!cityRadio) { setMsg('Выберите город.', true); return; }
+    if (city.length < 2) { setMsg('Введите название города.', true); $('f-city-other').focus(); return; }
+    if (!chosen) { setMsg('Выберите один из трёх вариантов графика.', true); return; }
+    if (!db || !uid) { setMsg('Голосование недоступно: войдите в аккаунт и откройте ссылку заново.', true); return; }
+    submitting = true; submitBtn.disabled = true; setMsg('Отправляем голос…', false);
+    var option = chosen.value, ref = db.doc('ballots/' + uid);
+    ref.get().then(function (snap) {
+      if (snap.exists) {
+        state.mine = (snap.data() || {}).option || option;
+        renderResults();
+        return;
+      }
+      var t = Date.now();
+      return db.doc('voters/' + uid).set({ fio: fio, position: position, city: city, option: option, t: t })
+        .then(function () { return ref.set({ option: option, t: t }); })
+        .then(function () { state.mine = option; setMsg('', false); renderResults(); });
+    }).catch(function (err) {
+      setMsg('Не удалось сохранить голос. Попробуйте ещё раз через минуту.', true);
+    }).then(function () { submitting = false; submitBtn.disabled = !state.canVote; });
+  });
+
+  function renderVoters(docs) {
+    var body = $('voters-body');
+    lastVoters = docs.map(function (d) { return { id: d.id, v: d.data() || {} }; });
+    $('csv').disabled = !docs.length;
+    body.textContent = '';
+    $('voters-empty').hidden = docs.length > 0;
+    docs.forEach(function (d) {
+      var v = d.data() || {};
+      var o = OPTIONS.filter(function (x) { return x.id === v.option; })[0];
+      var tr = document.createElement('tr');
+      [v.fio, v.position, v.city].forEach(function (txt) {
+        var td = document.createElement('td'); td.textContent = txt || ''; tr.appendChild(td);
+      });
+      var tdo = document.createElement('td'); tdo.className = 'mono';
+      tdo.textContent = o ? ('№' + o.n + ' · ' + label(o)) : ''; tr.appendChild(tdo);
+      var tda = document.createElement('td');
+      if (state.owner) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn-quiet'; b.textContent = 'Сбросить голос';
+        b.addEventListener('click', function () {
+          if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Точно сбросить?'; return; }
+          b.disabled = true;
+          Promise.all([db.doc('ballots/' + d.id).delete(), db.doc('voters/' + d.id).delete()])
+            .catch(function () { b.disabled = false; b.textContent = 'Не удалось'; });
+        });
+        tda.appendChild(b);
+      }
+      tr.appendChild(tda);
+      body.appendChild(tr);
+    });
+  }
+
+  function start() {
+    var c = window.claude;
+    if (!c || !c.use) { gate('Голосование доступно только на странице опроса в Claude. Эта копия показывает только оформление.', true); resNote('Результаты недоступны.'); return; }
+    Promise.all([c.use('db'), c.use('user')]).then(function (r) {
+      db = r[0]; var user = r[1];
+      if (!db || !user) { gate('Чтобы проголосовать, войдите в аккаунт Claude и откройте ссылку на опрос.', true); resNote('Результаты видны после входа в аккаунт.'); return; }
+      return Promise.all([user.id(), user.can('data.write'), user.canEdit(), user.isOwner()]).then(function (v) {
+        uid = v[0]; state.owner = !!v[3];
+        if (!uid) { gate('Чтобы проголосовать, войдите в аккаунт Claude и откройте ссылку на опрос.', true); resNote('Результаты видны после входа в аккаунт.'); return; }
+        if (v[1] === false) { gate('С вашим доступом голосовать нельзя. Попросите владельца страницы выдать доступ уровня «Участник».', true); }
+
+        var timer = setTimeout(function () { if (!state.loaded) resNote('Результаты пока не загрузились. Проверьте соединение.'); }, 10000);
+        db.collection('ballots').onSnapshot(function (snap) {
+          var counts = { a: 0, b: 0, c: 0 }, mine = null;
+          snap.docs.forEach(function (d) {
+            var opt = (d.data() || {}).option;
+            if (counts.hasOwnProperty(opt)) counts[opt]++;
+            if (d.id === uid) mine = opt;
+          });
+          state.counts = counts; state.mine = mine;
+          if (!snap.metadata.fromCache) { state.loaded = true; clearTimeout(timer); resNote(''); }
+          renderResults();
+        }, function () { clearTimeout(timer); resNote('Не удалось загрузить результаты.'); });
+
+        if (v[2]) {
+          $('admin').hidden = false;
+          $('res-panel').hidden = false;
+          $('cols').classList.remove('solo');
+          c.use('downloads').then(function (dl) { if (dl) { csvSave = dl; $('csv').hidden = false; } });
+          if (!state.owner) $('th-act').textContent = '';
+          db.collection('voters').orderBy('t', 'desc').onSnapshot(function (snap) { renderVoters(snap.docs); }, function () {});
+        }
+      });
+    }).catch(function () { resNote('Не удалось подключиться к хранилищу голосов.'); });
+  }
+  start();
+})();
+</script>
+
+</body>
+</html>
