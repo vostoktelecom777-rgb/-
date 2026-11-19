@@ -3,7 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<style>[hidden]{display:none!important}img{max-width:100%}</style>
+<style>
+[hidden]{display:none!important}img{max-width:100%}
+.admin-gate{margin-top:28px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:fit-content;max-width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;font-size:.875rem}
+.admin-gate form{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.admin-gate input{font:inherit;height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);min-width:0}
+.admin-gate input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+</style>
 <title>Опрос графика работы</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -365,7 +371,7 @@ header.hero {
       </div>
       <div class="done" id="done" hidden>
         <h2>Ваш голос учтён</h2>
-        <p>Выбранный график: <strong id="done-choice"></strong>. Один аккаунт голосует один раз. Результаты опроса видит только администратор.</p>
+        <p>Выбранный график: <strong id="done-choice"></strong>. Один участник голосует один раз. Результаты опроса видит только администратор.</p>
       </div>
     </section>
 
@@ -394,6 +400,137 @@ header.hero {
   </details>
 </div>
 
+<script>
+/* Адрес серверной части (Google Apps Script, заканчивается на /exec). Вставьте его между кавычками. */
+var API_URL = '';
+(function () {
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function ssGet(k) { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } }
+  function ssSet(k, v) { try { if (v) sessionStorage.setItem(k, v); else sessionStorage.removeItem(k); } catch (e) {} }
+  var uid = lsGet('poll-uid');
+  if (!uid) { uid = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36); lsSet('poll-uid', uid); }
+  var adminKey = ssGet('poll-admin-key');
+
+  function call(params) {
+    var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    return fetch(API_URL + '?' + q).then(function (r) { return r.json(); });
+  }
+  function snap(docs) {
+    return { docs: docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false, hasPendingWrites: false }, docChanges: function () { return []; } };
+  }
+  function toDocs(list, kind) {
+    return list.map(function (v) {
+      return { id: v.id, exists: true, data: function () { return kind === 'ballots' ? { option: v.option, t: v.t } : v; } };
+    });
+  }
+  function subscribe(kind, desc, next, error) {
+    if (!adminKey) {
+      if (kind === 'ballots') {
+        var mine = lsGet('poll-mine');
+        next(snap(mine ? [{ id: uid, exists: true, data: function () { return { option: mine }; } }] : []));
+      } else { next(snap([])); }
+      return function () {};
+    }
+    var alive = true;
+    function refresh() {
+      call({ action: 'results', key: adminKey }).then(function (r) {
+        if (!alive) return;
+        if (!r.ok) { if (error) error({ code: 'revoked' }); return; }
+        var list = r.voters.slice();
+        if (desc) list.sort(function (a, b) { return b.t - a.t; });
+        next(snap(toDocs(list, kind)));
+      }).catch(function () { if (alive && error) error({ code: 'unavailable' }); });
+    }
+    refresh();
+    var timer = setInterval(refresh, 20000);
+    return function () { alive = false; clearInterval(timer); };
+  }
+  function collection(path, desc) {
+    return {
+      orderBy: function (f, d) { return collection(path, d === 'desc'); },
+      onSnapshot: function (next, error) { return subscribe(path, desc, next, error); }
+    };
+  }
+  var db = {
+    collection: function (path) { return collection(path, false); },
+    doc: function (path) {
+      var coll = path.split('/')[0];
+      return {
+        get: function () {
+          var mine = coll === 'ballots' ? lsGet('poll-mine') : null;
+          return Promise.resolve({ exists: !!mine, data: function () { return mine ? { option: mine } : undefined; } });
+        },
+        set: function (data) {
+          if (coll === 'voters') {
+            return call({ action: 'vote', uid: uid, fio: data.fio, position: data.position, city: data.city, option: data.option }).then(function (r) {
+              if (!r.ok) {
+                var e = { code: r.error };
+                if (r.error === 'duplicate') e.userMessage = 'Участник с таким ФИО или с этого устройства уже проголосовал.';
+                else if (r.error === 'invalid') e.userMessage = 'Проверьте поля формы и попробуйте ещё раз.';
+                throw e;
+              }
+            });
+          }
+          if (coll === 'ballots') lsSet('poll-mine', data.option);
+          return Promise.resolve();
+        },
+        delete: function () { return Promise.resolve(); }
+      };
+    }
+  };
+  var user = {
+    isOwner: function () { return Promise.resolve(false); },
+    canEdit: function () { return Promise.resolve(!!adminKey); },
+    can: function () { return Promise.resolve(true); },
+    id: function () { return Promise.resolve(uid); }
+  };
+  var downloads = {
+    save: function (o) {
+      var blob = new Blob([o.data], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = o.filename;
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      return Promise.resolve({ status: 'saved' });
+    }
+  };
+  window.claude = { use: function (name) {
+    if (name === 'db') return Promise.resolve(API_URL ? db : null);
+    if (name === 'user') return Promise.resolve(user);
+    if (name === 'downloads') return Promise.resolve(downloads);
+    return Promise.resolve(null);
+  } };
+
+  // Вход администратора по ключу
+  var wrap = document.querySelector('.wrap');
+  if (wrap) {
+    var box = document.createElement('div');
+    box.className = 'admin-gate';
+    if (adminKey) {
+      box.innerHTML = '<span>Вы вошли как администратор.</span><button type="button" class="btn-quiet" id="a-out">Выйти</button>';
+    } else {
+      box.innerHTML = '<button type="button" class="btn-quiet" id="a-open">Вход для администратора</button>' +
+        '<form id="a-form" hidden><input type="password" id="a-key" autocomplete="current-password" placeholder="Ключ администратора" aria-label="Ключ администратора"> ' +
+        '<button type="submit" class="btn-quiet">Войти</button> <span id="a-msg"></span></form>';
+    }
+    wrap.appendChild(box);
+    var outBtn = document.getElementById('a-out');
+    if (outBtn) outBtn.addEventListener('click', function () { ssSet('poll-admin-key', ''); location.reload(); });
+    var openBtn = document.getElementById('a-open'), aform = document.getElementById('a-form');
+    if (openBtn) openBtn.addEventListener('click', function () { aform.hidden = !aform.hidden; if (!aform.hidden) document.getElementById('a-key').focus(); });
+    if (aform) aform.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var key = document.getElementById('a-key').value, msg = document.getElementById('a-msg');
+      if (!API_URL) { msg.textContent = 'Сервер не подключён.'; return; }
+      msg.textContent = 'Проверяем…';
+      call({ action: 'results', key: key }).then(function (r) {
+        if (r.ok) { ssSet('poll-admin-key', key); location.reload(); } else msg.textContent = 'Неверный ключ.';
+      }).catch(function () { msg.textContent = 'Не удалось связаться с сервером.'; });
+    });
+  }
+})();
+</script>
 <script>
 (function () {
   var OPTIONS = [
@@ -695,7 +832,7 @@ header.hero {
         .then(function () { return ref.set({ option: option, t: t }); })
         .then(function () { state.mine = option; setMsg('', false); renderResults(); });
     }).catch(function (err) {
-      setMsg('Не удалось сохранить голос. Попробуйте ещё раз через минуту.', true);
+      setMsg((err && err.userMessage) || 'Не удалось сохранить голос. Попробуйте ещё раз через минуту.', true);
     }).then(function () { submitting = false; submitBtn.disabled = !state.canVote; });
   });
 
@@ -733,13 +870,13 @@ header.hero {
 
   function start() {
     var c = window.claude;
-    if (!c || !c.use) { gate('Голосование доступно только на странице опроса в Claude. Эта копия показывает только оформление.', true); resNote('Результаты недоступны.'); return; }
+    if (!c || !c.use) { gate('Голосование работает только на странице claude.ai.', true); resNote('Результаты недоступны.'); return; }
     Promise.all([c.use('db'), c.use('user')]).then(function (r) {
       db = r[0]; var user = r[1];
-      if (!db || !user) { gate('Чтобы проголосовать, войдите в аккаунт Claude и откройте ссылку на опрос.', true); resNote('Результаты видны после входа в аккаунт.'); return; }
+      if (!db || !user) { gate('Голосование ещё не подключено к серверу: в index.html не указан адрес API_URL.', true); resNote('Результаты видны после входа в аккаунт.'); return; }
       return Promise.all([user.id(), user.can('data.write'), user.canEdit(), user.isOwner()]).then(function (v) {
         uid = v[0]; state.owner = !!v[3];
-        if (!uid) { gate('Чтобы проголосовать, войдите в аккаунт Claude и откройте ссылку на опрос.', true); resNote('Результаты видны после входа в аккаунт.'); return; }
+        if (!uid) { gate('Голосование ещё не подключено к серверу: в index.html не указан адрес API_URL.', true); resNote('Результаты видны после входа в аккаунт.'); return; }
         if (v[1] === false) { gate('С вашим доступом голосовать нельзя. Попросите владельца страницы выдать доступ уровня «Участник».', true); }
 
         var timer = setTimeout(function () { if (!state.loaded) resNote('Результаты пока не загрузились. Проверьте соединение.'); }, 10000);
